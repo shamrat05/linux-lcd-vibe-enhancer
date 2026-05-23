@@ -110,6 +110,9 @@ if command -v gsettings >/dev/null 2>&1; then
         gsettings set org.cinnamon.desktop.keybindings looking-glass-keybinding "['<Super>l']"
         gsettings set org.cinnamon.desktop.keybindings.media-keys screensaver "['<Control><Alt>l', 'XF86ScreenSaver']"
         gsettings set org.cinnamon.desktop.keybindings custom-list "['custom0', 'custom1']"
+
+        # Reset background wallpaper to Linux Mint default
+        gsettings set org.cinnamon.desktop.background picture-uri "file:///usr/share/backgrounds/linuxmint/default.png"
     fi
     
     # Reset GNOME desktop interface settings
