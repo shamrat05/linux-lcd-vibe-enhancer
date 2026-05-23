@@ -60,12 +60,6 @@ cp icc/ASUS_DisplayP3.icm "$HOME/.local/share/icc/"
 cp icc/ASUS_sRGB.icm "$HOME/.local/share/icc/"
 echo -e "  ${GREEN}✓${NC} ASUS color profiles (DCI-P3, Display-P3, sRGB) copied to local share."
 
-# Premium wallpaper installation
-if [ -d wallpapers ]; then
-    mkdir -p "$HOME/Pictures"
-    cp wallpapers/premium_dark_wallpaper.png "$HOME/Pictures/"
-    echo -e "  ${GREEN}✓${NC} Premium dark wallpaper installed."
-fi
 
 # 2. Registering and applying DCI-P3 color profile via colord
 echo -e "\n${BLUE}[2/5] Setting up colord color profiles...${NC}"
@@ -140,8 +134,8 @@ if command -v gsettings >/dev/null 2>&1; then
         gsettings set org.cinnamon.desktop.keybindings.custom-keybinding:/org/cinnamon/desktop/keybindings/custom-keybindings/custom2/ command 'gnome-system-monitor'
         gsettings set org.cinnamon.desktop.keybindings.custom-keybinding:/org/cinnamon/desktop/keybindings/custom-keybindings/custom2/ binding "['<Primary><Shift>Escape']"
 
-        # Apply Premium dark wallpaper
-        gsettings set org.cinnamon.desktop.background picture-uri "file://$HOME/Pictures/premium_dark_wallpaper.png"
+        # Apply Premium dark wallpaper (Milad Fakurian's world-class minimal dark abstract design)
+        gsettings set org.cinnamon.desktop.background picture-uri "file:///usr/share/backgrounds/linuxmint-wallpapers/mfakurian_black.jpg"
     fi
     
     # Apply to GNOME schemas (used by many GTK apps)
