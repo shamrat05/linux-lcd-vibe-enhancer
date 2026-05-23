@@ -36,6 +36,15 @@ if [ -f "$HOME/.config/fontconfig/fonts.conf" ]; then
 fi
 echo -e "  ${GREEN}✓${NC} Local fontconfig settings removed."
 
+# Remove Xresources
+if [ -f "$HOME/.Xresources" ]; then
+    rm -f "$HOME/.Xresources"
+    if command -v xrdb >/dev/null 2>&1; then
+        echo "" | xrdb -load || true
+    fi
+    echo -e "  ${GREEN}✓${NC} Local Xresources configuration removed."
+fi
+
 # Keep ICC files in local share but we won't delete them as they are useful.
 
 # 2. Resetting active display settings

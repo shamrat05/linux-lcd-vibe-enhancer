@@ -37,6 +37,15 @@ mkdir -p "$HOME/.config/fontconfig"
 cp config/fontconfig/fonts.conf "$HOME/.config/fontconfig/"
 echo -e "  ${GREEN}✓${NC} Fontconfig local settings installed."
 
+# Xresources configuration
+if [ -f config/Xresources ]; then
+    cp config/Xresources "$HOME/.Xresources"
+    if command -v xrdb >/dev/null 2>&1; then
+        xrdb -merge "$HOME/.Xresources" || true
+    fi
+    echo -e "  ${GREEN}✓${NC} Xresources font/DPI configurations applied."
+fi
+
 # ICC color profiles
 mkdir -p "$HOME/.local/share/icc"
 cp icc/ASUS_DCIP3.icm "$HOME/.local/share/icc/"
