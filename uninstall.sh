@@ -104,6 +104,12 @@ if command -v gsettings >/dev/null 2>&1; then
             gsettings set com.gexperts.Tilix.Keybindings terminal-copy '<Ctrl><Shift>c'
             gsettings set com.gexperts.Tilix.Keybindings terminal-paste '<Ctrl><Shift>v'
         fi
+
+        # Reset system keybindings back to defaults
+        gsettings set org.cinnamon.desktop.keybindings.wm panel-run-dialog "['<Alt>F2']"
+        gsettings set org.cinnamon.desktop.keybindings looking-glass-keybinding "['<Super>l']"
+        gsettings set org.cinnamon.desktop.keybindings.media-keys screensaver "['<Control><Alt>l', 'XF86ScreenSaver']"
+        gsettings set org.cinnamon.desktop.keybindings custom-list "['custom0', 'custom1']"
     fi
     
     # Reset GNOME desktop interface settings

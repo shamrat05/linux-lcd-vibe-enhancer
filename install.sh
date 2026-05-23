@@ -123,6 +123,15 @@ if command -v gsettings >/dev/null 2>&1; then
             gsettings set com.gexperts.Tilix.Keybindings terminal-copy '<Ctrl>c'
             gsettings set com.gexperts.Tilix.Keybindings terminal-paste '<Ctrl>v'
         fi
+
+        # Windows-like system keybindings (Win+L to Lock, Win+R to Run, Ctrl+Shift+Esc for Task Manager)
+        gsettings set org.cinnamon.desktop.keybindings.wm panel-run-dialog "['<Alt>F2', '<Super>r']"
+        gsettings set org.cinnamon.desktop.keybindings looking-glass-keybinding "['<Super><Shift>l']"
+        gsettings set org.cinnamon.desktop.keybindings.media-keys screensaver "['<Control><Alt>l', '<Super>l', 'XF86ScreenSaver']"
+        gsettings set org.cinnamon.desktop.keybindings custom-list "['custom0', 'custom1', 'custom2']"
+        gsettings set org.cinnamon.desktop.keybindings.custom-keybinding:/org/cinnamon/desktop/keybindings/custom-keybindings/custom2/ name 'Task Manager'
+        gsettings set org.cinnamon.desktop.keybindings.custom-keybinding:/org/cinnamon/desktop/keybindings/custom-keybindings/custom2/ command 'gnome-system-monitor'
+        gsettings set org.cinnamon.desktop.keybindings.custom-keybinding:/org/cinnamon/desktop/keybindings/custom-keybindings/custom2/ binding "['<Primary><Shift>Escape']"
     fi
     
     # Apply to GNOME schemas (used by many GTK apps)
