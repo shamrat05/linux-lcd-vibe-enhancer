@@ -23,7 +23,7 @@ DESKTOP="${XDG_CURRENT_DESKTOP:-}"
 echo -e "* Desktop environment detected: ${BOLD}${DESKTOP}${NC}"
 
 # 1. Copying local configuration files
-echo -e "\n${BLUE}[1/5] Copying configuration files...${NC}"
+echo -e "\n${BLUE}[1/6] Copying configuration files...${NC}"
 
 # Autostart configuration
 mkdir -p "$HOME/.config/autostart"
@@ -69,7 +69,7 @@ fi
 
 
 # 2. Registering and applying DCI-P3 color profile via colord
-echo -e "\n${BLUE}[2/5] Setting up colord color profiles...${NC}"
+echo -e "\n${BLUE}[2/6] Setting up colord color profiles...${NC}"
 if command -v colormgr >/dev/null 2>&1; then
     # Dynamically find the primary display device ID
     DEVICE_ID=$(colormgr get-devices | grep -E -A 10 "Type:[[:space:]]*display" | grep "Device ID:" | head -n 1 | awk -F': ' '{print $2}' | xargs || true)
@@ -101,7 +101,7 @@ else
 fi
 
 # 3. Applying font and text scaling configurations
-echo -e "\n${BLUE}[3/5] Applying font settings and text scaling...${NC}"
+echo -e "\n${BLUE}[3/6] Applying font settings and text scaling...${NC}"
 if command -v gsettings >/dev/null 2>&1; then
     # Apply fonts (Inter and JetBrains Mono)
     echo -e "  Configuring system fonts to Inter and JetBrains Mono..."
@@ -160,7 +160,7 @@ else
 fi
 
 # 4. Cleaning up old configuration conflicts
-echo -e "\n${BLUE}[4/5] Checking for system configuration conflicts...${NC}"
+echo -e "\n${BLUE}[4/6] Checking for system configuration conflicts...${NC}"
 if [ -f /etc/fonts/local.conf ]; then
     # Check if /etc/fonts/local.conf has syntax error
     if fc-list : family 2>&1 | grep -q "syntax error"; then
@@ -175,8 +175,34 @@ else
     echo -e "  No conflicting global local.conf found."
 fi
 
-# 5. Refreshing caches and applying changes
-echo -e "\n${BLUE}[5/5] Refreshing display and font configurations...${NC}"
+# 5. Patching and compiling ELAN SPI fingerprint driver for press/tap support
+echo -e "\n${BLUE}[5/6] Checking and patching ELAN SPI fingerprint driver...${NC}"
+LIBFPRINT_DIR="$HOME/libfprint-mincrmatt12"
+if [ -d "$LIBFPRINT_DIR" ]; then
+    echo -e "  Found custom libfprint repository at $LIBFPRINT_DIR."
+    DRIVER_FILE="$LIBFPRINT_DIR/libfprint/drivers/elanspi.c"
+    if [ -f "$DRIVER_FILE" ]; then
+        echo -e "  Patching elanspi.c to use press/tap mode..."
+        sed -i 's/dev_class->scan_type = FP_SCAN_TYPE_SWIPE;/dev_class->scan_type = FP_SCAN_TYPE_PRESS;/g' "$DRIVER_FILE"
+        
+        echo -e "  Compiling patched libfprint..."
+        ninja -C "$LIBFPRINT_DIR/build" >/dev/null
+        
+        echo -e "  Installing patched libfprint (requires sudo)..."
+        sudo ninja -C "$LIBFPRINT_DIR/build" install >/dev/null
+        
+        echo -e "  Restarting fprintd service..."
+        sudo systemctl restart fprintd || true
+        echo -e "  ${GREEN}✓${NC} Patched ELAN SPI fingerprint driver compiled and installed successfully."
+    else
+        echo -e "  ${YELLOW}!${NC} Could not find elanspi.c at $DRIVER_FILE."
+    fi
+else
+    echo -e "  ${YELLOW}!${NC} Custom libfprint repository not found at $LIBFPRINT_DIR. Skipping fingerprint driver patch."
+fi
+
+# 6. Refreshing caches and applying changes
+echo -e "\n${BLUE}[6/6] Refreshing display and font configurations...${NC}"
 echo -e "  Rebuilding font cache..."
 fc-cache -fv >/dev/null || true
 
