@@ -63,8 +63,8 @@ echo -e "  ${GREEN}✓${NC} ASUS color profiles (DCI-P3, Display-P3, sRGB) copie
 # Premium dark wallpapers installation
 if [ -d wallpapers ]; then
     mkdir -p "$HOME/Pictures"
-    cp wallpapers/od_gargantua.png wallpapers/od_space01.png wallpapers/od_hills.png "$HOME/Pictures/"
-    echo -e "  ${GREEN}✓${NC} Premium minimalist dark wallpapers (Gargantua, Space, Hills) installed."
+    cp wallpapers/od_gargantua.png wallpapers/od_space01.png wallpapers/od_hills.png wallpapers/web_sunset_mountains.png "$HOME/Pictures/"
+    echo -e "  ${GREEN}✓${NC} Premium minimalist dark wallpapers installed."
 fi
 
 
@@ -141,8 +141,8 @@ if command -v gsettings >/dev/null 2>&1; then
         gsettings set org.cinnamon.desktop.keybindings.custom-keybinding:/org/cinnamon/desktop/keybindings/custom-keybindings/custom2/ command 'gnome-system-monitor'
         gsettings set org.cinnamon.desktop.keybindings.custom-keybinding:/org/cinnamon/desktop/keybindings/custom-keybindings/custom2/ binding "['<Primary><Shift>Escape']"
 
-        # Apply Premium dark wallpaper (OneDark Gargantua black hole minimalist design)
-        gsettings set org.cinnamon.desktop.background picture-uri "file://$HOME/Pictures/od_gargantua.png"
+        # Apply Premium dark wallpaper (Sunset Mountains minimalist design)
+        gsettings set org.cinnamon.desktop.background picture-uri "file://$HOME/Pictures/web_sunset_mountains.png"
     fi
     
     # Apply to GNOME schemas (used by many GTK apps)
