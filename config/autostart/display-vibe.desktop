@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Exec=/home/shamrat/.config/autostart/apply-display-vibe.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name=Display Vibe Enhancer
+Comment=Applies Broadcast RGB Full and Gamma tuning for an AMOLED-like display experience
