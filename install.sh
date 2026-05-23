@@ -182,8 +182,17 @@ if [ -d "$LIBFPRINT_DIR" ]; then
     echo -e "  Found custom libfprint repository at $LIBFPRINT_DIR."
     DRIVER_FILE="$LIBFPRINT_DIR/libfprint/drivers/elanspi.c"
     if [ -f "$DRIVER_FILE" ]; then
-        echo -e "  Patching elanspi.c to use press/tap mode..."
-        sed -i 's/dev_class->scan_type = FP_SCAN_TYPE_SWIPE;/dev_class->scan_type = FP_SCAN_TYPE_PRESS;/g' "$DRIVER_FILE"
+        echo -e "  Applying press/tap driver patches to elanspi.c..."
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        PATCH_FILE="$SCRIPT_DIR/config/elanspi.patch"
+        if [ -f "$PATCH_FILE" ]; then
+            (cd "$LIBFPRINT_DIR" && git checkout -- libfprint/drivers/elanspi.c && git apply "$PATCH_FILE")
+            echo -e "  Applied custom elanspi.patch successfully."
+        else
+            # Fallback to simple sed if patch file is not found
+            sed -i 's/dev_class->scan_type = FP_SCAN_TYPE_SWIPE;/dev_class->scan_type = FP_SCAN_TYPE_PRESS;/g' "$DRIVER_FILE"
+            echo -e "  Patch file not found. Used fallback sed configuration."
+        fi
         
         echo -e "  Compiling patched libfprint..."
         ninja -C "$LIBFPRINT_DIR/build" >/dev/null
