@@ -90,6 +90,17 @@ if command -v gsettings >/dev/null 2>&1; then
         gsettings set org.cinnamon.settings-daemon.plugins.xsettings antialiasing 'rgba'
         gsettings set org.cinnamon.settings-daemon.plugins.xsettings hinting 'slight'
         gsettings set org.cinnamon.settings-daemon.plugins.xsettings rgba-order 'rgb'
+
+        # Reset animations to traditional
+        gsettings set org.cinnamon desktop-effects-close 'traditional'
+        gsettings set org.cinnamon desktop-effects-map 'traditional'
+        gsettings set org.cinnamon desktop-effects-minimize 'traditional'
+
+        # Reset theme borders to Mint-Y
+        gsettings set org.cinnamon.desktop.wm.preferences theme 'Mint-Y'
+
+        # Reset taskbar to left-aligned
+        gsettings set org.cinnamon enabled-applets "['panel1:left:0:menu@cinnamon.org:0', 'panel1:left:1:separator@cinnamon.org:1', 'panel1:left:2:grouped-window-list@cinnamon.org:2', 'panel1:right:0:systray@cinnamon.org:3', 'panel1:right:1:xapp-status@cinnamon.org:4', 'panel1:right:2:notifications@cinnamon.org:5', 'panel1:right:3:printers@cinnamon.org:6', 'panel1:right:4:removable-drives@cinnamon.org:7', 'panel1:right:5:keyboard@cinnamon.org:8', 'panel1:right:6:favorites@cinnamon.org:9', 'panel1:right:7:network@cinnamon.org:10', 'panel1:right:8:sound@cinnamon.org:11', 'panel1:right:9:power@cinnamon.org:12', 'panel1:right:10:calendar@cinnamon.org:13', 'panel1:right:11:cornerbar@cinnamon.org:14']"
     fi
     
     # Reset GNOME desktop interface settings

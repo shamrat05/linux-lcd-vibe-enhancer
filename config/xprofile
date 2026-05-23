@@ -1,0 +1,20 @@
+#!/bin/sh
+# ==============================================================================
+# Cinnamon / Muffin WM Performance and Smoothness Enhancements
+# ==============================================================================
+
+# 1. Disable Clutter's software VSync (prevents micro-stutters and input lag)
+# Clutter's internal VSync can conflict with GPU drivers, causing framedrops.
+# Setting it to none passes VSync responsibility directly to the display driver.
+export CLUTTER_VBLANK=none
+
+# 2. NVIDIA GPU Optimizations (reducing latency and CPU overhead)
+export __GL_YIELD="USLEEP"           # Avoids busy-waiting in NVIDIA driver threads
+export __GL_MAX_FRAMES_ALLOWED=1     # Hard limits render queue to 1 frame to eliminate input lag
+
+# 3. Intel Graphics & Mesa Optimizations
+export vblank_mode=0                 # Disables driver-level software vblank wait, relying on WM sync
+export mesa_glthread=true            # Enables multi-threaded OpenGL for Mesa drivers (Intel/AMD)
+
+# 4. Clutter actor layout cache optimization
+export CLUTTER_ACTOR_NO_LAYOUT=1     # Reduces layout overhead in GNOME/Cinnamon shell
