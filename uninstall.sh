@@ -126,6 +126,23 @@ if command -v gsettings >/dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} Reset fonts and text scaling back to system defaults (Noto Sans, 1.0x)."
 fi
 
+# 5. Ensuring fingerprint service is disabled and cleaned up
+echo -e "\n${BLUE}[5/5] Disabling fingerprint service and cleaning up builds...${NC}"
+echo -e "  Stopping, disabling, and masking fprintd service..."
+sudo systemctl stop fprintd.service 2>/dev/null || true
+sudo systemctl disable fprintd.service 2>/dev/null || true
+sudo systemctl mask fprintd.service 2>/dev/null || true
+
+if [ -f /etc/pam.d/common-auth ]; then
+    echo -e "  Reverting fingerprint references in PAM (/etc/pam.d/common-auth)..."
+    sudo sed -i -E 's/^(auth[[:space:]]+.*pam_fingwit\.so.*)/#\1/; s/^(auth[[:space:]]+.*pam_fprintd\.so.*)/#\1/' /etc/pam.d/common-auth 2>/dev/null || true
+fi
+
+echo -e "  Removing any custom fingerprint builds and configs..."
+sudo rm -rf /opt/libfprint-mincrmatt /opt/fprintd-mincrmatt /etc/systemd/system/fprintd.service.d 2>/dev/null || true
+sudo systemctl daemon-reload 2>/dev/null || true
+echo -e "  ${GREEN}✓${NC} Fingerprint service successfully disabled and custom libraries cleaned up."
+
 # Rebuild font cache
 fc-cache -fv >/dev/null || true
 

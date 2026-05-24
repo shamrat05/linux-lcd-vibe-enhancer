@@ -175,40 +175,24 @@ else
     echo -e "  No conflicting global local.conf found."
 fi
 
-# 5. Patching and compiling ELAN SPI fingerprint driver for press/tap support
-echo -e "\n${BLUE}[5/6] Checking and patching ELAN SPI fingerprint driver...${NC}"
-LIBFPRINT_DIR="$HOME/libfprint-mincrmatt12"
-if [ -d "$LIBFPRINT_DIR" ]; then
-    echo -e "  Found custom libfprint repository at $LIBFPRINT_DIR."
-    DRIVER_FILE="$LIBFPRINT_DIR/libfprint/drivers/elanspi.c"
-    if [ -f "$DRIVER_FILE" ]; then
-        echo -e "  Applying press/tap driver patches to elanspi.c..."
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        PATCH_FILE="$SCRIPT_DIR/config/elanspi.patch"
-        if [ -f "$PATCH_FILE" ]; then
-            (cd "$LIBFPRINT_DIR" && git checkout -- libfprint/drivers/elanspi.c && git apply "$PATCH_FILE")
-            echo -e "  Applied custom elanspi.patch successfully."
-        else
-            # Fallback to simple sed if patch file is not found
-            sed -i 's/dev_class->scan_type = FP_SCAN_TYPE_SWIPE;/dev_class->scan_type = FP_SCAN_TYPE_PRESS;/g' "$DRIVER_FILE"
-            echo -e "  Patch file not found. Used fallback sed configuration."
-        fi
-        
-        echo -e "  Compiling patched libfprint..."
-        ninja -C "$LIBFPRINT_DIR/build" >/dev/null
-        
-        echo -e "  Installing patched libfprint (requires sudo)..."
-        sudo ninja -C "$LIBFPRINT_DIR/build" install >/dev/null
-        
-        echo -e "  Restarting fprintd service..."
-        sudo systemctl restart fprintd || true
-        echo -e "  ${GREEN}✓${NC} Patched ELAN SPI fingerprint driver compiled and installed successfully."
-    else
-        echo -e "  ${YELLOW}!${NC} Could not find elanspi.c at $DRIVER_FILE."
-    fi
-else
-    echo -e "  ${YELLOW}!${NC} Custom libfprint repository not found at $LIBFPRINT_DIR. Skipping fingerprint driver patch."
+# 5. Deactivating and disabling fingerprint service for power saving and stability
+echo -e "\n${BLUE}[5/6] Ensuring fingerprint service is disabled for stability...${NC}"
+echo -e "  Stopping, disabling, and masking fprintd service..."
+sudo systemctl stop fprintd.service 2>/dev/null || true
+sudo systemctl disable fprintd.service 2>/dev/null || true
+sudo systemctl mask fprintd.service 2>/dev/null || true
+
+# Comment out fingerprint modules in PAM if they exist
+if [ -f /etc/pam.d/common-auth ]; then
+    echo -e "  Reverting fingerprint references in PAM (/etc/pam.d/common-auth)..."
+    sudo sed -i -E 's/^(auth[[:space:]]+.*pam_fingwit\.so.*)/#\1/; s/^(auth[[:space:]]+.*pam_fprintd\.so.*)/#\1/' /etc/pam.d/common-auth 2>/dev/null || true
 fi
+
+# Remove custom built files to save space
+echo -e "  Removing any custom fingerprint builds and configs..."
+sudo rm -rf /opt/libfprint-mincrmatt /opt/fprintd-mincrmatt /etc/systemd/system/fprintd.service.d 2>/dev/null || true
+sudo systemctl daemon-reload 2>/dev/null || true
+echo -e "  ${GREEN}✓${NC} Fingerprint service successfully disabled and custom libraries cleaned up."
 
 # 6. Refreshing caches and applying changes
 echo -e "\n${BLUE}[6/6] Refreshing display and font configurations...${NC}"
