@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Ensure Built-in Audio is Default Sink
+Exec=bash -c 'sleep 6 && wpctl set-default $(pw-cli list-objects | grep -B1 "node.name.*alsa_output" | grep id | head -1 | grep -oP "\d+")'
+NoDisplay=true
+X-GNOME-Autostart-Phase=Applications
+X-KDE-autostart-after=panel
+X-MATE-Autostart-Delay=10
