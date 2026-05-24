@@ -1,5 +1,5 @@
 diff --git a/libfprint/drivers/elanspi.c b/libfprint/drivers/elanspi.c
-index c6414dd..5fe0d06 100644
+index c6414dd..db03036 100644
 --- a/libfprint/drivers/elanspi.c
 +++ b/libfprint/drivers/elanspi.c
 @@ -20,6 +20,8 @@
@@ -11,7 +11,26 @@ index c6414dd..5fe0d06 100644
  #include "drivers_api.h"
  #include "elanspi.h"
  
-@@ -509,64 +511,20 @@ enum elanspi_guess_result {
+@@ -467,16 +469,9 @@ out:
+  */
+ 
+ static void elanspi_correct_with_bg(FpiDeviceElanSpi *self, guint16 *raw_image, gboolean incl_noise) {
+-	int count_min = 0;
+-
+ 	for (int i = 0; i < self->sensor_width * self->sensor_height; ++i) {
+-		if (raw_image[i] < self->bg_image[i]) {
+-			count_min++;
+-			if (!incl_noise) raw_image[i] = 0;
+-		}
+-		else {
+-			raw_image[i] -= self->bg_image[i];
+-		}
++		int diff = abs((int)raw_image[i] - (int)self->bg_image[i]);
++		raw_image[i] = (guint16)diff;
+ 	}
+ }
+ 
+@@ -509,64 +504,20 @@ enum elanspi_guess_result {
   * images
   */
  static enum elanspi_guess_result elanspi_guess_image(FpiDeviceElanSpi *self, guint16 *raw_image) {
@@ -24,11 +43,17 @@ index c6414dd..5fe0d06 100644
 -	for (int i = 0; i < self->sensor_width*self->sensor_height; ++i) {
 -		gint64 j = (gint64)raw_image[i] - mean;
 -		sq_stddev += j*j;
--	}
--
++	gint64 abs_diff_sum = 0;
++	int size = self->sensor_width * self->sensor_height;
++	for (int i = 0; i < size; ++i) {
++		abs_diff_sum += abs((int)raw_image[i] - (int)self->bg_image[i]);
+ 	}
++	gint64 abs_diff_mean = abs_diff_sum / size;
+ 
 -	// Now, we compute the distavg
 -	size_t frame_size = self->sensor_width * self->sensor_height;
--
++	g_debug("elanspi_guess_image: abs_diff_mean = %ld", abs_diff_mean);
+ 
 -	sq_stddev /= frame_size;
 -	
 -	g_autofree guint16 *sorted = g_malloc(frame_size * 2);
@@ -50,26 +75,20 @@ index c6414dd..5fe0d06 100644
 -		}
 -		else
 -			count = step;
-+	gint64 abs_diff_sum = 0;
-+	int size = self->sensor_width * self->sensor_height;
-+	for (int i = 0; i < size; ++i) {
-+		abs_diff_sum += abs((int)raw_image[i] - (int)self->bg_image[i]);
- 	}
-+	gint64 abs_diff_mean = abs_diff_sum / size;
- 
--	gint64 distavg = ELANSPI_MIN_EMPTY_DISTAVG - 1;
-+	g_debug("elanspi_guess_image: abs_diff_mean = %ld", abs_diff_mean);
- 
--	if (first != sorted) {
--		guint16 low_half_end = *(first - 1);
--		guint16 high_half_begin = *first;
--
--		distavg = ((mean - low_half_end) + (high_half_begin - mean)) / 2;
 +	if (abs_diff_mean > 350) {
 +		return ELANSPI_GUESS_FP;
 +	} else {
 +		return ELANSPI_GUESS_EMPTY;
  	}
+-
+-	gint64 distavg = ELANSPI_MIN_EMPTY_DISTAVG - 1;
+-
+-	if (first != sorted) {
+-		guint16 low_half_end = *(first - 1);
+-		guint16 high_half_begin = *first;
+-
+-		distavg = ((mean - low_half_end) + (high_half_begin - mean)) / 2;
+-	}
 -
 -	int is_fp = 0, is_empty = 0;
 -	if (sq_stddev < ELANSPI_MAX_REAL_STDDEV) ++is_fp;
@@ -86,7 +105,7 @@ index c6414dd..5fe0d06 100644
  }
  
  
-@@ -678,30 +636,96 @@ static void elanspi_init(FpiDeviceElanSpi *self, GError **err) {
+@@ -678,30 +629,96 @@ static void elanspi_init(FpiDeviceElanSpi *self, GError **err) {
  	if (*err) return;
  }
  
@@ -134,8 +153,8 @@ index c6414dd..5fe0d06 100644
 +		for (int j = 0; j < src_width; ++j) {
 +			int val = (int)data_in[i * src_width + j] - row_mean;
 +			temp_buffer[i * src_width + j] = val;
- 		}
- 	}
++		}
++	}
 +
 +	memcpy(temp_sorted, temp_buffer, frame_size * sizeof(int));
 +	qsort(temp_sorted, frame_size, sizeof(int), cmp_int);
@@ -155,8 +174,8 @@ index c6414dd..5fe0d06 100644
 +			else
 +				px = 127;
 +			src_pixels[i * src_width + j] = px;
-+		}
-+	}
+ 		}
+ 	}
 +
 +	// Bilinear upscaling to 192x192
 +	for (int y = 0; y < out_height; ++y) {
@@ -202,7 +221,7 @@ index c6414dd..5fe0d06 100644
  static void elanspi_capture_fingerprint_done(GObject *source, GAsyncResult* res, gpointer user_data) {
  	FpiDeviceElanSpi *self = FPI_DEVICE_ELANSPI(source);
  	FpiSsm *ssm = user_data;
-@@ -715,6 +739,13 @@ static void elanspi_capture_fingerprint_done(GObject *source, GAsyncResult* res,
+@@ -715,6 +732,13 @@ static void elanspi_capture_fingerprint_done(GObject *source, GAsyncResult* res,
  		return;
  	}
  
@@ -216,7 +235,7 @@ index c6414dd..5fe0d06 100644
  	if (ptr == 0) {
  		fpi_ssm_jump_to_state(ssm, ELANSPI_CAPTURE_WAIT_DOWN);
  		return; // didn't succeed
-@@ -745,10 +776,9 @@ static gboolean elanspi_wait_for_finger_state(FpiDeviceElanSpi *self, enum elans
+@@ -745,10 +769,9 @@ static gboolean elanspi_wait_for_finger_state(FpiDeviceElanSpi *self, enum elans
  		if (*err) {
  			return FALSE;
  		}
@@ -228,7 +247,7 @@ index c6414dd..5fe0d06 100644
  		if (guess == target) {
  			++debounce;
  			if (debounce == ELANSPI_MIN_FRAMES_DEBOUNCE) {
-@@ -769,152 +799,70 @@ static void elanspi_capture_fingerprint_task(GTask *task, gpointer source_object
+@@ -769,152 +792,70 @@ static void elanspi_capture_fingerprint_task(GTask *task, gpointer source_object
  	FpiDeviceElanSpi *self = FPI_DEVICE_ELANSPI(source_object);
  	GError *err = NULL;
  
@@ -354,20 +373,7 @@ index c6414dd..5fe0d06 100644
 -					g_debug("too many frames");
 -					goto exitloop;
 -				}
-+		if (elanspi_guess_image(self, raw_image) == ELANSPI_GUESS_FP) {
-+			g_debug("Fingerprint found on attempt %d", attempts);
-+			break;
-+		}
-+		
-+		if (attempts == 5) {
-+			g_debug("Fingerprint wasn't found after 5 attempts!");
-+			fpi_image_device_retry_scan(FP_IMAGE_DEVICE(self), FP_DEVICE_RETRY_TOO_SHORT);
-+			g_task_return_pointer(task, NULL, g_free); // failed
-+			return;
-+		}
-+		g_usleep(10000); // Wait 10ms before retrying
-+	}
- 
+-
 -				g_debug("adding frame");
 -				
 -				this_frame = g_malloc(sensor_size + sizeof(struct fpi_frame));
@@ -386,11 +392,32 @@ index c6414dd..5fe0d06 100644
 -				}
 -				list_of_frames = g_slist_prepend(list_of_frames, this_frame);
 -				break;
++		if (elanspi_guess_image(self, raw_image) == ELANSPI_GUESS_FP) {
++			g_debug("Fingerprint found on attempt %d", attempts);
++			break;
+ 		}
++		
++		if (attempts == 5) {
++			g_debug("Fingerprint wasn't found after 5 attempts!");
++			fpi_image_device_retry_scan(FP_IMAGE_DEVICE(self), FP_DEVICE_RETRY_TOO_SHORT);
++			g_task_return_pointer(task, NULL, g_free); // failed
++			return;
++		}
++		g_usleep(10000); // Wait 10ms before retrying
+ 	}
+-exitloop:
+-	;
+-	// discard last few frames
+-	GSList *start = g_slist_nth(list_of_frames, ELANSPI_SWIPE_FRAMES_DISCARD);
+ 
+-	fpi_do_movement_estimation (&ctx, start);
+-	FpImage *img = fpi_assemble_frames (&ctx, start);
 +	// Create new image with double the dimensions of the sensor (upscaling for NBIS)
 +	int out_width = self->sensor_width * 2;
 +	int out_height = self->sensor_height * 2;
 +	FpImage *img = fp_image_new(out_width, out_height);
-+	img->flags |= FPI_IMAGE_PARTIAL;
+ 	img->flags |= FPI_IMAGE_PARTIAL | FPI_IMAGE_COLORS_INVERTED;
+-	g_slist_free_full(list_of_frames, g_free);
 +	
 +	// Save raw and background images for analysis
 +	{
@@ -399,7 +426,7 @@ index c6414dd..5fe0d06 100644
 +			fwrite(raw_image, 2, sensor_size, f_raw);
 +			fclose(f_raw);
 +			g_debug("Saved raw image to /var/lib/fprint/raw_fp.raw");
- 		}
++		}
 +		FILE *f_bg = fopen("/var/lib/fprint/bg_fp.raw", "wb");
 +		if (f_bg) {
 +			fwrite(self->bg_image, 2, sensor_size, f_bg);
@@ -419,21 +446,13 @@ index c6414dd..5fe0d06 100644
 +		fwrite(img->data, 1, out_width * out_height, f);
 +		fclose(f);
 +		g_debug("Saved captured image to /var/lib/fprint/captured_fp.pgm");
- 	}
--exitloop:
--	;
--	// discard last few frames
--	GSList *start = g_slist_nth(list_of_frames, ELANSPI_SWIPE_FRAMES_DISCARD);
- 
--	fpi_do_movement_estimation (&ctx, start);
--	FpImage *img = fpi_assemble_frames (&ctx, start);
--	img->flags |= FPI_IMAGE_PARTIAL | FPI_IMAGE_COLORS_INVERTED;
--	g_slist_free_full(list_of_frames, g_free);
++	}
++
 +	g_debug("successfully captured single frame press image");
  
  	g_task_return_pointer(task, img, g_object_unref);
  }
-@@ -947,7 +895,7 @@ static void elanspi_wait_finger_state_done(GObject *source, GAsyncResult* res, g
+@@ -947,7 +888,7 @@ static void elanspi_wait_finger_state_done(GObject *source, GAsyncResult* res, g
  
  	// The wait finger task doesn't return anything, since it doesn't really change state in any way.
  	// It _can_ however report an error, so we check for that
@@ -442,7 +461,7 @@ index c6414dd..5fe0d06 100644
  
  	if (err) {
  		// Report the error back to the ssm
-@@ -955,6 +903,11 @@ static void elanspi_wait_finger_state_done(GObject *source, GAsyncResult* res, g
+@@ -955,6 +896,11 @@ static void elanspi_wait_finger_state_done(GObject *source, GAsyncResult* res, g
  		return;
  	}
  
@@ -454,7 +473,7 @@ index c6414dd..5fe0d06 100644
  	// Tell FPI about the finger state
  	fpi_image_device_report_finger_status(FP_IMAGE_DEVICE(source), !self->waiting_up);
  
-@@ -1108,7 +1061,7 @@ static void fpi_device_elanspi_class_init(FpiDeviceElanSpiClass *klass) {
+@@ -1108,7 +1054,7 @@ static void fpi_device_elanspi_class_init(FpiDeviceElanSpiClass *klass) {
  	dev_class->full_name = "ElanTech Embedded Fingerprint Sensor";
  	dev_class->type = FP_DEVICE_TYPE_UDEV;
  	dev_class->id_table = elanspi_id_table;
