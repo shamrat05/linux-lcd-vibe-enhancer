@@ -1,31 +1,234 @@
 diff --git a/libfprint/drivers/elanspi.c b/libfprint/drivers/elanspi.c
-index c6414dd..cf7a83a 100644
+index c6414dd..d09f587 100644
 --- a/libfprint/drivers/elanspi.c
 +++ b/libfprint/drivers/elanspi.c
-@@ -688,15 +688,19 @@ static void elanspi_process_frame(FpiDeviceElanSpi *self, const guint16 *data_in
- 	guint16 lvl2 = data_in_sorted[frame_size * 65 / 100];
- 	guint16 lvl3 = data_in_sorted[frame_size - 1];
+@@ -20,6 +20,8 @@
  
-+	guint16 diff1 = lvl1 - lvl0;
-+	guint16 diff2 = lvl2 - lvl1;
-+	guint16 diff3 = lvl3 - lvl2;
+ #define FP_COMPONENT "elanspi"
+ 
++#include <stdio.h>
++#include <stdlib.h>
+ #include "drivers_api.h"
+ #include "elanspi.h"
+ 
+@@ -509,64 +511,20 @@ enum elanspi_guess_result {
+  * images
+  */
+ static enum elanspi_guess_result elanspi_guess_image(FpiDeviceElanSpi *self, guint16 *raw_image) {
+-	// Compute the standard deviation. I know there's a FpImage method for this but we're working
+-	// with raw images.
+-	
+-	gint64 mean = elanspi_mean_image(self, raw_image);
+-	gint64 sq_stddev = 0;
+-
+-	for (int i = 0; i < self->sensor_width*self->sensor_height; ++i) {
+-		gint64 j = (gint64)raw_image[i] - mean;
+-		sq_stddev += j*j;
+-	}
+-
+-	// Now, we compute the distavg
+-	size_t frame_size = self->sensor_width * self->sensor_height;
+-
+-	sq_stddev /= frame_size;
+-	
+-	g_autofree guint16 *sorted = g_malloc(frame_size * 2);
+-	memcpy(sorted, raw_image, frame_size * 2);
+-	qsort(sorted, frame_size, 2, cmp_u16);
+-	
+-	// Find the index of the mean
+-	guint16 *it, *first = sorted;
+-	ptrdiff_t count, step;
+-	count = frame_size;
+-
+-	while (count > 0) {
+-		it = first;
+-		step = count / 2;
+-		it += step;
+-		if (*it < mean) {
+-			first = ++it;
+-			count -= step + 1;
+-		}
+-		else
+-			count = step;
++	gint64 abs_diff_sum = 0;
++	int size = self->sensor_width * self->sensor_height;
++	for (int i = 0; i < size; ++i) {
++		abs_diff_sum += abs((int)raw_image[i] - (int)self->bg_image[i]);
+ 	}
++	gint64 abs_diff_mean = abs_diff_sum / size;
+ 
+-	gint64 distavg = ELANSPI_MIN_EMPTY_DISTAVG - 1;
++	g_debug("elanspi_guess_image: abs_diff_mean = %ld", abs_diff_mean);
+ 
+-	if (first != sorted) {
+-		guint16 low_half_end = *(first - 1);
+-		guint16 high_half_begin = *first;
+-
+-		distavg = ((mean - low_half_end) + (high_half_begin - mean)) / 2;
++	if (abs_diff_mean > 350) {
++		return ELANSPI_GUESS_FP;
++	} else {
++		return ELANSPI_GUESS_EMPTY;
+ 	}
+-
+-	int is_fp = 0, is_empty = 0;
+-	if (sq_stddev < ELANSPI_MAX_REAL_STDDEV) ++is_fp;
+-	if (sq_stddev > ELANSPI_MIN_EMPTY_STDDEV) ++is_empty;
+-
+-	if (distavg < ELANSPI_MAX_REAL_DISTAVG) ++is_fp;
+-	if (distavg > ELANSPI_MIN_EMPTY_DISTAVG) ++is_empty;
+-
+-	//g_debug("guess %ld %ld %d %d", sq_stddev, distavg, is_fp, is_empty);
+-
+-	if (is_fp > is_empty) return ELANSPI_GUESS_FP;
+-	else if (is_empty > is_fp) return ELANSPI_GUESS_EMPTY;
+-	else return ELANSPI_GUESS_UNKNOWN;
+ }
+ 
+ 
+@@ -678,30 +636,96 @@ static void elanspi_init(FpiDeviceElanSpi *self, GError **err) {
+ 	if (*err) return;
+ }
+ 
++static int cmp_int(const void *a, const void *b) {
++	return *(const int *)a - *(const int *)b;
++}
 +
- 	for (int i = 0; i < self->sensor_height; ++i) {
- 		for (int j = 0; j < self->sensor_width; ++j) {
- 			guint16 px = data_in[(self->sensor_height - i - 1) * self->sensor_width + j];
- 			if (lvl0 <= px && px < lvl1)
+ static void elanspi_process_frame(FpiDeviceElanSpi *self, const guint16 *data_in, guint8 *data_out) {
+-	size_t frame_size = self->sensor_width * self->sensor_height;
+-	guint16 data_in_sorted[frame_size];
+-	memcpy(data_in_sorted, data_in, frame_size*2);
+-	qsort(data_in_sorted, frame_size, 2, cmp_u16);
+-	guint16 lvl0 = data_in_sorted[0];
+-	guint16 lvl1 = data_in_sorted[frame_size * 3 / 10];
+-	guint16 lvl2 = data_in_sorted[frame_size * 65 / 100];
+-	guint16 lvl3 = data_in_sorted[frame_size - 1];
+-
+-	for (int i = 0; i < self->sensor_height; ++i) {
+-		for (int j = 0; j < self->sensor_width; ++j) {
+-			guint16 px = data_in[(self->sensor_height - i - 1) * self->sensor_width + j];
+-			if (lvl0 <= px && px < lvl1)
 -				px = (px - lvl0) * 99 / (lvl1 - lvl0);
-+				px = diff1 ? (px - lvl0) * 99 / diff1 : 0;
- 			else if (lvl1 <= px && px < lvl2)
+-			else if (lvl1 <= px && px < lvl2)
 -				px = 99 + ((px - lvl1) * 56 / (lvl2 - lvl1));
-+				px = diff2 ? 99 + ((px - lvl1) * 56 / diff2) : 99;
- 			else                      // (lvl2 <= px && px <= lvl3)
+-			else                      // (lvl2 <= px && px <= lvl3)
 -				px = 155 + ((px - lvl2) * 100 / (lvl3 - lvl2));
-+				px = diff3 ? 155 + ((px - lvl2) * 100 / diff3) : 255;
- 			*data_out++ = px;
+-			*data_out++ = px;
++	int src_width = self->sensor_width;
++	int src_height = self->sensor_height;
++	int out_width = src_width * 2;
++	int out_height = src_height * 2;
++	size_t frame_size = src_width * src_height;
++
++	int *temp_buffer = g_malloc(frame_size * sizeof(int));
++	int *temp_sorted = g_malloc(frame_size * sizeof(int));
++	int *src_pixels = g_malloc(frame_size * sizeof(int));
++
++	// Perform row-mean subtraction
++	for (int i = 0; i < src_height; ++i) {
++		int row_sum = 0;
++		for (int j = 0; j < src_width; ++j) {
++			row_sum += (int)data_in[i * src_width + j];
++		}
++		int row_mean = row_sum / src_width;
++		for (int j = 0; j < src_width; ++j) {
++			int val = (int)data_in[i * src_width + j] - row_mean;
++			temp_buffer[i * src_width + j] = val;
++		}
++	}
++
++	memcpy(temp_sorted, temp_buffer, frame_size * sizeof(int));
++	qsort(temp_sorted, frame_size, sizeof(int), cmp_int);
++
++	// 5% and 95% percentiles for clamping/stretching
++	int lvl_low = temp_sorted[frame_size * 5 / 100];
++	int lvl_high = temp_sorted[frame_size * 95 / 100];
++
++	// Scale and vertically flip to src_pixels
++	for (int i = 0; i < src_height; ++i) {
++		for (int j = 0; j < src_width; ++j) {
++			int px = temp_buffer[(src_height - i - 1) * src_width + j];
++			if (px < lvl_low) px = lvl_low;
++			if (px > lvl_high) px = lvl_high;
++			if (lvl_high > lvl_low)
++				px = (px - lvl_low) * 255 / (lvl_high - lvl_low);
++			else
++				px = 127;
++			src_pixels[i * src_width + j] = px;
++		}
++	}
++
++	// Bilinear upscaling to 192x192
++	for (int y = 0; y < out_height; ++y) {
++		for (int x = 0; x < out_width; ++x) {
++			int gx_fp = (x * (src_width - 1) * 65536) / (out_width - 1);
++			int gy_fp = (y * (src_height - 1) * 65536) / (out_height - 1);
++
++			int gxi = gx_fp >> 16;
++			int gyi = gy_fp >> 16;
++
++			int dx = gx_fp & 0xffff;
++			int dy = gy_fp & 0xffff;
++
++			int x1 = gxi + 1;
++			if (x1 >= src_width) x1 = src_width - 1;
++			int y1 = gyi + 1;
++			if (y1 >= src_height) y1 = src_height - 1;
++
++			int p00 = src_pixels[gyi * src_width + gxi];
++			int p10 = src_pixels[gyi * src_width + x1];
++			int p01 = src_pixels[y1 * src_width + gxi];
++			int p11 = src_pixels[y1 * src_width + x1];
++
++			gint64 val = (gint64)p00 * (65536 - dx) * (65536 - dy) +
++			              (gint64)p10 * dx * (65536 - dy) +
++			              (gint64)p01 * (65536 - dx) * dy +
++			              (gint64)p11 * dx * dy;
++			
++			int px = (int)(val >> 32);
++			if (px < 0) px = 0;
++			if (px > 255) px = 255;
++
++			data_out[y * out_width + x] = (guint8)px;
  		}
  	}
-@@ -769,152 +773,46 @@ static void elanspi_capture_fingerprint_task(GTask *task, gpointer source_object
++
++	g_free(temp_buffer);
++	g_free(temp_sorted);
++	g_free(src_pixels);
+ }
+ 
++
+ static void elanspi_capture_fingerprint_done(GObject *source, GAsyncResult* res, gpointer user_data) {
+ 	FpiDeviceElanSpi *self = FPI_DEVICE_ELANSPI(source);
+ 	FpiSsm *ssm = user_data;
+@@ -715,6 +739,13 @@ static void elanspi_capture_fingerprint_done(GObject *source, GAsyncResult* res,
+ 		return;
+ 	}
+ 
++	if (self->deactivating) {
++		g_debug("Device is deactivating, discarding image");
++		if (ptr) g_object_unref(ptr);
++		fpi_ssm_mark_failed(ssm, g_error_new_literal(g_io_error_quark(), G_IO_ERROR_CANCELLED, "Deactivation in progress"));
++		return;
++	}
++
+ 	if (ptr == 0) {
+ 		fpi_ssm_jump_to_state(ssm, ELANSPI_CAPTURE_WAIT_DOWN);
+ 		return; // didn't succeed
+@@ -745,10 +776,9 @@ static gboolean elanspi_wait_for_finger_state(FpiDeviceElanSpi *self, enum elans
+ 		if (*err) {
+ 			return FALSE;
+ 		}
+-		elanspi_correct_with_bg(self, raw_image, 1);
++
+ 		// Check which type we think it is
+ 		enum elanspi_guess_result guess = elanspi_guess_image(self, raw_image);
+-		if (guess == ELANSPI_GUESS_UNKNOWN) continue;
+ 		if (guess == target) {
+ 			++debounce;
+ 			if (debounce == ELANSPI_MIN_FRAMES_DEBOUNCE) {
+@@ -769,152 +799,70 @@ static void elanspi_capture_fingerprint_task(GTask *task, gpointer source_object
  	FpiDeviceElanSpi *self = FPI_DEVICE_ELANSPI(source_object);
  	GError *err = NULL;
  
@@ -35,31 +238,22 @@ index c6414dd..cf7a83a 100644
 - * SINGLE IMAGE VERSION
 -	g_autofree guint16 *raw_image = g_malloc(self->sensor_width*self->sensor_height * 2);
 -	// Take an image
-+	int sensor_size = self->sensor_width * self->sensor_height;
-+	g_autofree guint16 *raw_image = g_malloc(sensor_size * 2);
-+
-+	g_debug("Starting single image capture for press mode");
-+
-+	// Try to grab a raw frame
- 	elanspi_capture_raw_image(self, raw_image, &err);
+-	elanspi_capture_raw_image(self, raw_image, &err);
 -	// Check for failure
-+
- 	if (err) {
- 		g_debug("Capture raw image reported error");
- 		g_task_return_error(task, err);
- 		return;
- 	}
+-	if (err) {
+-		g_debug("Capture raw image reported error");
+-		g_task_return_error(task, err);
+-		return;
+-	}
 -	// Make sure there's a finger there
-+
-+	elanspi_correct_with_bg(self, raw_image, 1);
- 	if (elanspi_guess_image(self, raw_image) != ELANSPI_GUESS_FP) {
- 		g_debug("Fingerprint wasn't found in the capture!");
+-	if (elanspi_guess_image(self, raw_image) != ELANSPI_GUESS_FP) {
+-		g_debug("Fingerprint wasn't found in the capture!");
 -		// Complain
- 		fpi_image_device_retry_scan(FP_IMAGE_DEVICE(self), FP_DEVICE_RETRY_TOO_SHORT);
+-		fpi_image_device_retry_scan(FP_IMAGE_DEVICE(self), FP_DEVICE_RETRY_TOO_SHORT);
 -		// Stop the SSM
- 		g_task_return_pointer(task, NULL, g_free); // failed
- 		return;
- 	}
+-		g_task_return_pointer(task, NULL, g_free); // failed
+-		return;
+-	}
 -*/
 -	struct fpi_frame_asmbl_ctx ctx = {
 -		.frame_width = self->sensor_width,
@@ -94,7 +288,7 @@ index c6414dd..cf7a83a 100644
 -	 */
 -
 -	int empty_counter = 0;
--	int sensor_size = self->sensor_width * self->sensor_height;
+ 	int sensor_size = self->sensor_width * self->sensor_height;
 -	guint16 raw_frame[sensor_size];
 -	guint16 raw_frame_copy[sensor_size];
 -	struct fpi_frame *this_frame = NULL;
@@ -106,12 +300,15 @@ index c6414dd..cf7a83a 100644
 -			// we were cancelled
 -			return;
 -		}
--
++	g_autofree guint16 *raw_image = g_malloc(sensor_size * 2);
+ 
 -		// Try to grab a raw frame
 -		elanspi_capture_raw_image(self, raw_frame, &err);
++	g_debug("Starting single image capture for press mode");
  
-+	// Capture a few more frames to let the finger press settle
-+	for (int i = 0; i < 4; ++i) {
++	int attempts = 0;
++	while (attempts < 5) {
++		attempts++;
 +		elanspi_capture_raw_image(self, raw_image, &err);
  		if (err) {
  			g_task_return_error(task, err);
@@ -119,7 +316,7 @@ index c6414dd..cf7a83a 100644
 -			list_of_frames = NULL;
  			return;
  		}
--
+ 
 -		memcpy(raw_frame_copy, raw_frame, sensor_size*2);
 -		elanspi_correct_with_bg(self, raw_frame, 1);
 -		// Check the type of the frame
@@ -176,7 +373,18 @@ index c6414dd..cf7a83a 100644
 -				}
 -				list_of_frames = g_slist_prepend(list_of_frames, this_frame);
 -				break;
--		}
++		if (elanspi_guess_image(self, raw_image) == ELANSPI_GUESS_FP) {
++			g_debug("Fingerprint found on attempt %d", attempts);
++			break;
+ 		}
++		
++		if (attempts == 5) {
++			g_debug("Fingerprint wasn't found after 5 attempts!");
++			fpi_image_device_retry_scan(FP_IMAGE_DEVICE(self), FP_DEVICE_RETRY_TOO_SHORT);
++			g_task_return_pointer(task, NULL, g_free); // failed
++			return;
++		}
++		g_usleep(10000); // Wait 10ms before retrying
  	}
 -exitloop:
 -	;
@@ -185,20 +393,68 @@ index c6414dd..cf7a83a 100644
  
 -	fpi_do_movement_estimation (&ctx, start);
 -	FpImage *img = fpi_assemble_frames (&ctx, start);
-+	// Create new image with the dimensions of the sensor
-+	FpImage *img = fp_image_new(self->sensor_width, self->sensor_height);
++	// Create new image with double the dimensions of the sensor (upscaling for NBIS)
++	int out_width = self->sensor_width * 2;
++	int out_height = self->sensor_height * 2;
++	FpImage *img = fp_image_new(out_width, out_height);
  	img->flags |= FPI_IMAGE_PARTIAL | FPI_IMAGE_COLORS_INVERTED;
 -	g_slist_free_full(list_of_frames, g_free);
 +	
++	// Save raw and background images for analysis
++	{
++		FILE *f_raw = fopen("/var/lib/fprint/raw_fp.raw", "wb");
++		if (f_raw) {
++			fwrite(raw_image, 2, sensor_size, f_raw);
++			fclose(f_raw);
++			g_debug("Saved raw image to /var/lib/fprint/raw_fp.raw");
++		}
++		FILE *f_bg = fopen("/var/lib/fprint/bg_fp.raw", "wb");
++		if (f_bg) {
++			fwrite(self->bg_image, 2, sensor_size, f_bg);
++			fclose(f_bg);
++			g_debug("Saved background image to /var/lib/fprint/bg_fp.raw");
++		}
++	}
++
 +	// Apply background correction and process the frame
 +	elanspi_correct_with_bg(self, raw_image, 0);
 +	elanspi_process_frame(self, raw_image, img->data);
++
++	// Save to /home/shamrat/captured_fp.pgm
++	FILE *f = fopen("/var/lib/fprint/captured_fp.pgm", "wb");
++	if (f) {
++		fprintf(f, "P5\n%d %d\n255\n", out_width, out_height);
++		fwrite(img->data, 1, out_width * out_height, f);
++		fclose(f);
++		g_debug("Saved captured image to /var/lib/fprint/captured_fp.pgm");
++	}
 +
 +	g_debug("successfully captured single frame press image");
  
  	g_task_return_pointer(task, img, g_object_unref);
  }
-@@ -1108,7 +1006,7 @@ static void fpi_device_elanspi_class_init(FpiDeviceElanSpiClass *klass) {
+@@ -947,7 +895,7 @@ static void elanspi_wait_finger_state_done(GObject *source, GAsyncResult* res, g
+ 
+ 	// The wait finger task doesn't return anything, since it doesn't really change state in any way.
+ 	// It _can_ however report an error, so we check for that
+-	g_task_propagate_pointer(G_TASK(res), &err);
++	g_task_propagate_boolean(G_TASK(res), &err);
+ 
+ 	if (err) {
+ 		// Report the error back to the ssm
+@@ -955,6 +903,11 @@ static void elanspi_wait_finger_state_done(GObject *source, GAsyncResult* res, g
+ 		return;
+ 	}
+ 
++	if (self->deactivating) {
++		fpi_ssm_mark_failed(ssm, g_error_new_literal(g_io_error_quark(), G_IO_ERROR_CANCELLED, "Deactivation in progress"));
++		return;
++	}
++
+ 	// Tell FPI about the finger state
+ 	fpi_image_device_report_finger_status(FP_IMAGE_DEVICE(source), !self->waiting_up);
+ 
+@@ -1108,7 +1061,7 @@ static void fpi_device_elanspi_class_init(FpiDeviceElanSpiClass *klass) {
  	dev_class->full_name = "ElanTech Embedded Fingerprint Sensor";
  	dev_class->type = FP_DEVICE_TYPE_UDEV;
  	dev_class->id_table = elanspi_id_table;
