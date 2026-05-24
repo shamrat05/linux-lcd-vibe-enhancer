@@ -1,5 +1,5 @@
 diff --git a/libfprint/drivers/elanspi.c b/libfprint/drivers/elanspi.c
-index c6414dd..d09f587 100644
+index c6414dd..5fe0d06 100644
 --- a/libfprint/drivers/elanspi.c
 +++ b/libfprint/drivers/elanspi.c
 @@ -20,6 +20,8 @@
@@ -134,8 +134,8 @@ index c6414dd..d09f587 100644
 +		for (int j = 0; j < src_width; ++j) {
 +			int val = (int)data_in[i * src_width + j] - row_mean;
 +			temp_buffer[i * src_width + j] = val;
-+		}
-+	}
+ 		}
+ 	}
 +
 +	memcpy(temp_sorted, temp_buffer, frame_size * sizeof(int));
 +	qsort(temp_sorted, frame_size, sizeof(int), cmp_int);
@@ -190,8 +190,8 @@ index c6414dd..d09f587 100644
 +			if (px > 255) px = 255;
 +
 +			data_out[y * out_width + x] = (guint8)px;
- 		}
- 	}
++		}
++	}
 +
 +	g_free(temp_buffer);
 +	g_free(temp_sorted);
@@ -292,7 +292,8 @@ index c6414dd..d09f587 100644
 -	guint16 raw_frame[sensor_size];
 -	guint16 raw_frame_copy[sensor_size];
 -	struct fpi_frame *this_frame = NULL;
--
++	g_autofree guint16 *raw_image = g_malloc(sensor_size * 2);
+ 
 -	GSList *list_of_frames = NULL;
 -
 -	while (1) {
@@ -300,8 +301,7 @@ index c6414dd..d09f587 100644
 -			// we were cancelled
 -			return;
 -		}
-+	g_autofree guint16 *raw_image = g_malloc(sensor_size * 2);
- 
+-
 -		// Try to grab a raw frame
 -		elanspi_capture_raw_image(self, raw_frame, &err);
 +	g_debug("Starting single image capture for press mode");
@@ -354,7 +354,20 @@ index c6414dd..d09f587 100644
 -					g_debug("too many frames");
 -					goto exitloop;
 -				}
--
++		if (elanspi_guess_image(self, raw_image) == ELANSPI_GUESS_FP) {
++			g_debug("Fingerprint found on attempt %d", attempts);
++			break;
++		}
++		
++		if (attempts == 5) {
++			g_debug("Fingerprint wasn't found after 5 attempts!");
++			fpi_image_device_retry_scan(FP_IMAGE_DEVICE(self), FP_DEVICE_RETRY_TOO_SHORT);
++			g_task_return_pointer(task, NULL, g_free); // failed
++			return;
++		}
++		g_usleep(10000); // Wait 10ms before retrying
++	}
+ 
 -				g_debug("adding frame");
 -				
 -				this_frame = g_malloc(sensor_size + sizeof(struct fpi_frame));
@@ -373,32 +386,11 @@ index c6414dd..d09f587 100644
 -				}
 -				list_of_frames = g_slist_prepend(list_of_frames, this_frame);
 -				break;
-+		if (elanspi_guess_image(self, raw_image) == ELANSPI_GUESS_FP) {
-+			g_debug("Fingerprint found on attempt %d", attempts);
-+			break;
- 		}
-+		
-+		if (attempts == 5) {
-+			g_debug("Fingerprint wasn't found after 5 attempts!");
-+			fpi_image_device_retry_scan(FP_IMAGE_DEVICE(self), FP_DEVICE_RETRY_TOO_SHORT);
-+			g_task_return_pointer(task, NULL, g_free); // failed
-+			return;
-+		}
-+		g_usleep(10000); // Wait 10ms before retrying
- 	}
--exitloop:
--	;
--	// discard last few frames
--	GSList *start = g_slist_nth(list_of_frames, ELANSPI_SWIPE_FRAMES_DISCARD);
- 
--	fpi_do_movement_estimation (&ctx, start);
--	FpImage *img = fpi_assemble_frames (&ctx, start);
 +	// Create new image with double the dimensions of the sensor (upscaling for NBIS)
 +	int out_width = self->sensor_width * 2;
 +	int out_height = self->sensor_height * 2;
 +	FpImage *img = fp_image_new(out_width, out_height);
- 	img->flags |= FPI_IMAGE_PARTIAL | FPI_IMAGE_COLORS_INVERTED;
--	g_slist_free_full(list_of_frames, g_free);
++	img->flags |= FPI_IMAGE_PARTIAL;
 +	
 +	// Save raw and background images for analysis
 +	{
@@ -407,7 +399,7 @@ index c6414dd..d09f587 100644
 +			fwrite(raw_image, 2, sensor_size, f_raw);
 +			fclose(f_raw);
 +			g_debug("Saved raw image to /var/lib/fprint/raw_fp.raw");
-+		}
+ 		}
 +		FILE *f_bg = fopen("/var/lib/fprint/bg_fp.raw", "wb");
 +		if (f_bg) {
 +			fwrite(self->bg_image, 2, sensor_size, f_bg);
@@ -427,8 +419,16 @@ index c6414dd..d09f587 100644
 +		fwrite(img->data, 1, out_width * out_height, f);
 +		fclose(f);
 +		g_debug("Saved captured image to /var/lib/fprint/captured_fp.pgm");
-+	}
-+
+ 	}
+-exitloop:
+-	;
+-	// discard last few frames
+-	GSList *start = g_slist_nth(list_of_frames, ELANSPI_SWIPE_FRAMES_DISCARD);
+ 
+-	fpi_do_movement_estimation (&ctx, start);
+-	FpImage *img = fpi_assemble_frames (&ctx, start);
+-	img->flags |= FPI_IMAGE_PARTIAL | FPI_IMAGE_COLORS_INVERTED;
+-	g_slist_free_full(list_of_frames, g_free);
 +	g_debug("successfully captured single frame press image");
  
  	g_task_return_pointer(task, img, g_object_unref);
